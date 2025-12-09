@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What's That Drone? - Cincinnati</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Unify Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2em;
+        }
+        
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+        
+        .search-box {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .search-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        input[type="text"] {
+            flex: 1;
+            min-width: 250px;
+            padding: 12px 15px;
+            border: 2px solid #EDEDED;
+            border-radius: 6px;
+            font-size: 16px;
+            font-family: 'Unify Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #009BFF;
+        }
+        
+        .search-btn {
+            padding: 12px 30px;
+            background: #009BFF;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Unify Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        .search-btn:hover {
+            background: #0077CC;
+        }
+        
+        .search-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        
+        .options-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .option-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .option-group label {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        
+        select, input[type="number"] {
+            padding: 8px 12px;
+            border: 2px solid #EDEDED;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: 'Unify Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        .results-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .results-box.show {
+            display: block;
+        }
+        
+        .result-stats {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .stat {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .stat-label {
+            color: #7f8c8d;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .stat-value {
+            color: #2c3e50;
+            font-size: 24px;
+            font-weight: 700;
+        }
+        
+        .stat-value.highlight {
+            color: #F03B4B;
+        }
+        
+        #map {
+            width: 100%;
+            height: 500px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .flight-list {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: none;
+        }
+        
+        .flight-list.show {
+            display: block;
+        }
+        
+        .flight-list h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+        
+        .flight-item {
+            padding: 15px;
+            border-left: 4px solid #009BFF;
+            background: #EDEDED;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .flight-item:hover {
+            background: #e8f4f8;
+            border-left-color: #0077CC;
+        }
+        
+        .flight-date {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .flight-details {
+            font-size: 14px;
+            color: #7f8c8d;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #7f8c8d;
+        }
+        
+        .error {
+            background: #fee;
+            color: #F03B4B;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .error.show {
+            display: block;
+        }
+        
+        .download-btn {
+            padding: 10px 20px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: 'Unify Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin-top: 15px;
+        }
+        
+        .download-btn:hover {
+            background: #229954;
+        }
+        
+        .map-tiles-light {
+            filter: grayscale(20%) brightness(110%) contrast(85%);
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            color: #7f8c8d;
+            font-size: 14px;
+            border-top: 1px solid #EDEDED;
+            margin-top: 30px;
+        }
+        
+        .footer a {
+            color: #009BFF;
+            text-decoration: none;
+            margin-left: 15px;
+        }
+        
+        .footer a:hover {
+            text-decoration: underline;
+        }
+        
+        .purpose-tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            border-bottom: 1px dotted #7f8c8d;
+        }
+        
+        .purpose-tooltip .tooltiptext {
+            visibility: hidden;
+            width: 300px;
+            background-color: #2c3e50;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 12px;
+            position: absolute;
+            z-index: 1000;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -150px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 13px;
+            line-height: 1.5;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .purpose-tooltip .tooltiptext::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #2c3e50 transparent transparent transparent;
+        }
+        
+        .purpose-tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        .tooltiptext a {
+            color: #009BFF;
+            text-decoration: underline;
+        }
+        
+        .tooltiptext a:hover {
+            color: #FFBE23;
+        }
+        
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.5em;
+            }
+            
+            .search-row {
+                flex-direction: column;
+            }
+            
+            input[type="text"] {
+                width: 100%;
+            }
+            
+            .search-btn {
+                width: 100%;
+            }
+            
+            #map {
+                height: 400px;
+            }
+            
+            .purpose-tooltip .tooltiptext {
+                width: 250px;
+                margin-left: -125px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚁 What's That Drone?</h1>
+        <p class="subtitle">Search for Cincinnati police drone flights near your address</p>
+        
+        <div class="error" id="errorBox"></div>
+        
+        <div class="search-box">
+            <div class="search-row">
+                <input 
+                    type="text" 
+                    id="addressInput" 
+                    placeholder="Enter your Cincinnati address (e.g., 801 Plum St)"
+                    onkeypress="if(event.key==='Enter') searchAddress()"
+                />
+                <button class="search-btn" onclick="searchAddress()" id="searchBtn">
+                    Search
+                </button>
+            </div>
+            
+            <div class="options-row">
+                <div class="option-group">
+                    <label for="radiusInput">Search Radius:</label>
+                    <select id="radiusInput">
+                        <option value="100">100 feet (~30m)</option>
+                        <option value="200">200 feet (~1 city block)</option>
+                        <option value="300" selected>300 feet (~1 football field)</option>
+                        <option value="500">500 feet (~2 city blocks)</option>
+                        <option value="1000">1,000 feet (~3 city blocks)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div class="results-box" id="resultsBox">
+            <div class="result-stats">
+                <div class="stat">
+                    <span class="stat-label">Total Flights</span>
+                    <span class="stat-value" id="totalFlights">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Closest Flight</span>
+                    <span class="stat-value highlight" id="closestFlight">-</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Most Recent</span>
+                    <span class="stat-value" id="mostRecent">-</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Total Airtime</span>
+                    <span class="stat-value" id="totalTime">-</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Top Reason</span>
+                    <span class="stat-value" id="topPurpose" style="font-size: 14px;">-</span>
+                </div>
+            </div>
+        </div>
+        
+        <div id="map"></div>
+        
+        <div class="flight-list" id="flightList">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0;">Flight Details</h3>
+                <button class="download-btn" onclick="downloadResults()" style="margin: 0;">
+                    📥 Download Results as CSV
+                </button>
+            </div>
+            <div id="flightItems"></div>
+        </div>
+        
+        <div class="footer">
+            © 2025 Cincinnati Enquirer
+            <a href="https://github.com/davidferrara23/enquirer-whatsthatdrone" target="_blank" rel="noopener noreferrer">
+                📄 View the code
+            </a>
+            <a href="https://cincinnati.com/article/here" target="_blank" rel="noopener noreferrer">
+                ❓ How does this work?
+            </a>
+            <br>
+            <span id="lastUpdated" style="margin-top: 10px; display: none; color: #95a5a6; font-size: 12px;">
+            </span>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        const map = L.map('map').setView([39.1, -84.5], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            className: 'map-tiles-light'
+        }).addTo(map);
+
+        let searchMarker = null;
+        let searchCircle = null;
+        let flightLayers = [];
+        let allFlights = null;
+        let nearbyFlights = [];
+        let flightDataPromise = null;
+        let userHasInteracted = false;
+
+        function loadFlightData() {
+            if (flightDataPromise) return flightDataPromise;
+            
+            console.log('Loading flight data...');
+            const startTime = Date.now();
+            
+            flightDataPromise = fetch('flights.geojson')
+                .then(response => response.json())
+                .then(data => {
+                    allFlights = data.features;
+                    const loadTime = ((Date.now() - startTime) / 1000).toFixed(1);
+                    console.log(`✓ Loaded ${allFlights.length} flights in ${loadTime}s`);
+                    
+                    // Find most recent flight date across all data
+                    const mostRecentTimestamp = Math.max(...allFlights.map(f => 
+                        new Date(f.properties.takeoff).getTime()
+                    ));
+                    const mostRecentDate = new Date(mostRecentTimestamp);
+                    const formattedDate = mostRecentDate.toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    });
+                    
+                    // Update footer and make visible
+                    const lastUpdated = document.getElementById('lastUpdated');
+                    lastUpdated.textContent = `Last updated on ${formattedDate}`;
+                    lastUpdated.style.display = 'inline-block';
+                    
+                    return allFlights;
+                })
+                .catch(error => {
+                    console.error('Error loading flight data:', error);
+                    flightDataPromise = null;
+                    throw error;
+                });
+
+            return flightDataPromise;
+        }
+
+        document.getElementById('addressInput').addEventListener('focus', function() {
+            if (!userHasInteracted) {
+                userHasInteracted = true;
+                console.log('User interaction detected - starting flight data load...');
+                loadFlightData();
+            }
+        });
+
+        document.getElementById('addressInput').addEventListener('input', function() {
+            if (!userHasInteracted) {
+                userHasInteracted = true;
+                console.log('User typing detected - starting flight data load...');
+                loadFlightData();
+            }
+        });
+
+        function showError(message) {
+            const errorBox = document.getElementById('errorBox');
+            errorBox.textContent = message;
+            errorBox.classList.add('show');
+            setTimeout(() => errorBox.classList.remove('show'), 5000);
+        }
+
+        function clearMap() {
+            if (searchMarker) map.removeLayer(searchMarker);
+            if (searchCircle) map.removeLayer(searchCircle);
+            flightLayers.forEach(layer => map.removeLayer(layer));
+            flightLayers = [];
+        }
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                     Math.sin(dLon/2) * Math.sin(dLon/2);
+            return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        async function searchAddress() {
+            const address = document.getElementById('addressInput').value.trim();
+            const radiusFeet = parseInt(document.getElementById('radiusInput').value);
+            const radiusMeters = radiusFeet * 0.3048;
+
+            if (!address) {
+                showError('Please enter an address');
+                return;
+            }
+
+            const searchBtn = document.getElementById('searchBtn');
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'Searching...';
+
+            try {
+                const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', Cincinnati, OH')}`;
+                const response = await fetch(geocodeUrl);
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    showError('Address not found. Please try a different address.');
+                    searchBtn.disabled = false;
+                    searchBtn.textContent = 'Search';
+                    return;
+                }
+
+                const lat = parseFloat(data[0].lat);
+                const lon = parseFloat(data[0].lon);
+
+                if (!allFlights) {
+                    searchBtn.textContent = 'Loading flights...';
+                    try {
+                        await loadFlightData();
+                    } catch (error) {
+                        showError('Failed to load flight data. Please try again.');
+                        searchBtn.disabled = false;
+                        searchBtn.textContent = 'Search';
+                        return;
+                    }
+                }
+
+                searchBtn.textContent = 'Finding nearby flights...';
+
+                clearMap();
+
+                searchMarker = L.marker([lat, lon], {
+                    icon: L.icon({
+                        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    })
+                }).addTo(map)
+                  .bindPopup(`<b>Your Address</b><br>${address}`)
+                  .openPopup();
+
+                searchCircle = L.circle([lat, lon], {
+                    radius: radiusMeters,
+                    color: '#F03B4B',
+                    fillColor: '#F03B4B',
+                    fillOpacity: 0.1,
+                    weight: 2
+                }).addTo(map);
+
+                const nearby = [];
+                allFlights.forEach(flight => {
+                    let minDist = Infinity;
+                    flight.geometry.coordinates.forEach(coord => {
+                        const d = getDistance(lat, lon, coord[1], coord[0]);
+                        if (d < minDist) minDist = d;
+                    });
+                    if (minDist <= radiusMeters) {
+                        nearby.push({
+                            id: flight.properties.flight_id,
+                            date: new Date(flight.properties.takeoff).toLocaleDateString(),
+                            takeoff: new Date(flight.properties.takeoff).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                            landing: new Date(flight.properties.landing).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                            purpose: flight.properties.flight_purpose === 'Call for Service' ? 'Unknown' : (flight.properties.flight_purpose || 'Unknown'),
+                            distance: minDist,
+                            distanceFeet: minDist * 3.28084,
+                            coordinates: flight.geometry.coordinates.map(c => [c[1], c[0]])
+                        });
+                    }
+                });
+
+                nearbyFlights = nearby.sort((a, b) => a.distance - b.distance);
+                displayResults(nearbyFlights, lat, lon, radiusFeet);
+
+                if (nearby.length > 0) {
+                    const bounds = L.latLngBounds([[lat, lon]]);
+                    nearby.forEach(flight => {
+                        flight.coordinates.forEach(coord => bounds.extend(coord));
+                    });
+                    map.fitBounds(bounds, { padding: [50, 50] });
+                } else {
+                    map.setView([lat, lon], 16);
+                }
+
+            } catch (error) {
+                showError('Error: ' + error.message);
+                console.error(error);
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Search';
+            }
+        }
+
+        function getColorByDistance(distance, maxDistance) {
+            const ratio = distance / maxDistance;
+            if (ratio < 0.33) return '#F03B4B';      // Red - closest
+            if (ratio < 0.67) return '#FA9631';      // Orange
+            return '#FFBE23';                        // Yellow - farthest
+        }
+
+        function displayResults(flights, searchLat, searchLon, radiusFeet) {
+            const resultsBox = document.getElementById('resultsBox');
+            const flightList = document.getElementById('flightList');
+            
+            if (flights.length === 0) {
+                resultsBox.classList.remove('show');
+                flightList.classList.remove('show');
+                showError('No flights found within the search radius');
+                return;
+            }
+
+            resultsBox.classList.add('show');
+            flightList.classList.add('show');
+
+            const now = new Date();
+            
+            // Parse the most recent flight time properly
+            const mostRecentFlight = flights.reduce((latest, f) => {
+                const flightTime = new Date(`${f.date} ${f.takeoff}`);
+                return flightTime > latest ? flightTime : latest;
+            }, new Date(0));
+            
+            const hoursAgo = Math.floor((now - mostRecentFlight) / (1000 * 60 * 60));
+            const daysAgo = Math.floor((now - mostRecentFlight) / (1000 * 60 * 60 * 24));
+            
+            // Display logic: if less than 24 hours but not same calendar day, show hours
+            let recentText;
+            if (hoursAgo < 1) {
+                recentText = 'Less than 1 hour ago';
+            } else if (hoursAgo < 24) {
+                recentText = `${hoursAgo} hour${hoursAgo !== 1 ? 's' : ''} ago`;
+            } else if (daysAgo === 0) {
+                recentText = 'Today';
+            } else if (daysAgo === 1) {
+                recentText = 'Yesterday';
+            } else {
+                recentText = `${daysAgo} days ago`;
+            }
+            
+            const totalMinutes = flights.reduce((sum, f) => {
+                const start = new Date(`${f.date} ${f.takeoff}`);
+                const end = new Date(`${f.date} ${f.landing}`);
+                return sum + (end - start) / (1000 * 60);
+            }, 0);
+            
+            const purposes = {};
+            flights.forEach(f => {
+                const purpose = f.purpose || 'Unknown';
+                purposes[purpose] = (purposes[purpose] || 0) + 1;
+            });
+            
+            // Filter out "Unknown" when finding top purpose
+            const purposesWithoutUnknown = Object.entries(purposes).filter(([key]) => key !== 'Unknown');
+            const topPurpose = purposesWithoutUnknown.length > 0 
+                ? purposesWithoutUnknown.sort((a, b) => b[1] - a[1])[0]
+                : ['Unknown', purposes['Unknown'] || 0];
+
+            document.getElementById('totalFlights').textContent = flights.length;
+            document.getElementById('closestFlight').textContent = `${flights[0].distanceFeet.toFixed(0)} feet`;
+            document.getElementById('mostRecent').textContent = recentText;
+            document.getElementById('totalTime').textContent = `${Math.round(totalMinutes)} mins`;
+            document.getElementById('topPurpose').textContent = `${topPurpose[0]} (${topPurpose[1]})`;
+            
+            const radiusMeters = radiusFeet * 0.3048;
+            flights.forEach(flight => {
+                const color = getColorByDistance(flight.distance, radiusMeters);
+                const line = L.polyline(flight.coordinates, {
+                    color: color,
+                    weight: 3,
+                    opacity: 0.7
+                }).addTo(map).bindPopup(
+                    `<b>Flight Details</b><br>` +
+                    `<b>Date:</b> ${flight.date}<br>` +
+                    `<b>Time:</b> ${flight.takeoff} - ${flight.landing}<br>` +
+                    `<b>Distance:</b> ${flight.distanceFeet.toFixed(0)} feet<br>` +
+                    `<b>Purpose:</b> ${flight.purpose || 'N/A'}`
+                );
+                flightLayers.push(line);
+
+                line.on('click', () => {
+                    map.fitBounds(line.getBounds(), { padding: [50, 50] });
+                });
+            });
+
+            const flightItems = document.getElementById('flightItems');
+            flightItems.innerHTML = flights.map(flight => `
+                <div class="flight-item" onclick="zoomToFlight('${flight.id}')">
+                    <div class="flight-date">${flight.date} - ${flight.distanceFeet.toFixed(0)} ft away</div>
+                    <div class="flight-details">
+                        <span>⏰ ${flight.takeoff} - ${flight.landing}</span>
+                        ${flight.purpose !== 'Unknown' ? `
+                            <span class="purpose-tooltip">📍 ${flight.purpose}
+                                <span class="tooltiptext">
+                                    Flight purposes are approximated by matching police calls for service that occurred nearby to drone flights in time and location. Flights labeled "Unknown" did not match to a specific incident type.
+                                    <a href="https://cincinnati.com/methodology" target="_blank">Learn more about our methodology.</a>
+                                </span>
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function zoomToFlight(flightId) {
+            const flight = nearbyFlights.find(f => f.id === flightId);
+            if (flight) {
+                const bounds = L.latLngBounds(flight.coordinates);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        }
+
+        function downloadResults() {
+            if (nearbyFlights.length === 0) return;
+
+            let csv = 'Flight ID,Date,Takeoff Time,Landing Time,Distance (feet),Purpose\n';
+            nearbyFlights.forEach(flight => {
+                csv += `${flight.id},"${flight.date}","${flight.takeoff}","${flight.landing}",${flight.distanceFeet.toFixed(0)},"${flight.purpose || 'N/A'}"\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'drone_flights_' + new Date().toISOString().slice(0,10) + '.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
