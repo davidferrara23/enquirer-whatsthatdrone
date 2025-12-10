@@ -7,7 +7,7 @@ library(sf)
 library(tidyverse)
 
 ### Load flight data (use CFS-matched version if it exists)
-flight_input <- if (file.exists("./whats-that-drone/flight_paths_matched.geojson")) {
+flight_input <- if (file.exists("./whats-that-drone/data/flight_paths_matched.geojson")) {
   message("Loading CFS-matched flight data...")
   "./whats-that-drone/data/flight_paths_matched.geojson"
 } else {
