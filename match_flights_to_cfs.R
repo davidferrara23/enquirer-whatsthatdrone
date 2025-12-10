@@ -7,12 +7,13 @@
 ### VARS
 
 cfs_csv <- "./whats-that-drone/data/cfs_2025_092125.csv"  # adjust path as needed
-flight_paths_geojson <- "./whats-that-drone/data/flight_paths.geojson"  # input flight paths
+flight_paths_geojson <- "./flight_paths.geojson"  # input flight paths
 county_centerlines_geojson <- "./whats-that-drone/data/Countywide_Street_Centerlines.geojson"
 
-# Cache file for processed CFS with centerlines
+# Cache files
 today_date <- format(Sys.Date(), "%Y%m%d")
 cfs_cache_file <- paste0("./whats-that-drone/data/cfs_with_centerlines_", today_date, ".rds")
+previous_matched_file <- "./whats-that-drone/data/flight_paths_matched.geojson"
 
 ### INITIALIZE
 
@@ -249,264 +250,447 @@ match_flights_to_cfs <- function(cfs_sf, flights_sf, buffer_distance = 50, time_
   return(matches_df)
 }
 
-### LOAD AND CLEAN DATA
+### LOAD CFS DATA (use cache or process)
 
 # Check if we have today's cached CFS data
 if (file.exists(cfs_cache_file)) {
   message("✓ Found cached CFS data from today: ", cfs_cache_file)
-  message("✓ Skipping CFS loading, API retrieval, and centerline matching")
   cfs_with_centerlines <- readRDS(cfs_cache_file)
   message("✓ Loaded ", nrow(cfs_with_centerlines), " CFS records with centerlines")
-  
 } else {
-  message("No cached CFS data for today - processing from scratch...")
+  # Check for yesterday's cache - use as base for CFS
+  yesterday_date <- format(Sys.Date() - 1, "%Y%m%d")
+  yesterday_cache <- paste0("./whats-that-drone/data/cfs_with_centerlines_", yesterday_date, ".rds")
   
-  message("Loading calls for service data...")
-  cfs <- read_csv(
-    cfs_csv,
-    col_types = cols(
-      ADDRESS_X = col_character(),
-      AGENCY = col_character(),
-      DISPOSITION_TEXT = col_character(),
-      EVENT_NUMBER = col_character(),
-      INCIDENT_TYPE_ID = col_character(),
-      INCIDENT_TYPE_DESC = col_character(),
-      PRIORITY = col_integer(),
-      CREATE_TIME_INCIDENT = col_datetime(format = "%Y %b %d %H:%M:%S %p"),
-      ARRIVAL_TIME_PRIMARY_UNIT = col_datetime(format = "%Y %b %d %H:%M:%S %p"),
-      CLOSED_TIME_INCIDENT = col_datetime(format = "%Y %b %d %H:%M:%S %p"),
-      DISPATCH_TIME_PRIMARY_UNIT = col_datetime(format = "%Y %b %d %H:%M:%S %p"),
-      BEAT = col_character(),
-      DISTRICT = col_character(),
-      CPD_NEIGHBORHOOD = col_character(),
-      LATITUDE_X = col_double(),
-      LONGITUDE_X = col_double()
-    )
-  )
-  
-  cfs <- cfs %>%
-    clean_names() %>%
-    mutate(
-      create_time_incident = lubridate::force_tz(create_time_incident, "America/New_York"),
-      closed_time_incident = lubridate::force_tz(closed_time_incident, "America/New_York")
-    )
-  
-  # Load most recent CAD calls via Socrata API
-  message("Checking for new CFS data from Socrata API...")
-  latest_date <- format(max(cfs$create_time_incident, na.rm = TRUE), "%Y-%m-%dT%H:%M:%S")
-  base_url <- "https://data.cincinnati-oh.gov/resource/gexm-h6bt.csv"
-  limit <- 1000
-  offset <- 0
-  all_new_rows <- list()
-  
-  repeat {
-    where_value <- paste0("create_time_incident>'", latest_date, "'")
-    socrata_url <- paste0(base_url, "?$where=", URLencode(where_value, reserved = TRUE), 
-                          "&$limit=", limit, "&$offset=", format(offset, scientific = FALSE))
-    message("Requesting: ", socrata_url)
-
-    batch <- tryCatch(
-      read.csv(socrata_url, stringsAsFactors = FALSE, na.strings = c("", "NA")),
-      error = function(e) {
-        message("Error fetching URL: ", e$message)
-        return(data.frame())
-      }
-    )
-
-    if (nrow(batch) == 0) {
-      message("No new rows returned for offset=", offset)
-      break
-    }
-
-    all_new_rows[[length(all_new_rows) + 1]] <- batch
-    offset <- offset + limit
-    if (nrow(batch) < limit) break
-  }
-  
-  new_rows <- dplyr::bind_rows(all_new_rows)
-  
-  # If new rows exist, combine with static data
-  if (nrow(new_rows) > 0) {
-    message("Found ", nrow(new_rows), " new CFS records from API")
+  if (file.exists(yesterday_cache)) {
+    message("✓ Found yesterday's CFS cache - using as base")
+    cfs_with_centerlines <- readRDS(yesterday_cache)
+    latest_cfs_date <- max(cfs_with_centerlines$create_time_incident, na.rm = TRUE)
+    message("✓ Latest CFS in cache: ", latest_cfs_date)
     
-    new_rows <- new_rows %>%
+    # Only fetch NEW CFS records since yesterday
+    message("Fetching only NEW CFS records from API...")
+    latest_date <- format(latest_cfs_date, "%Y-%m-%dT%H:%M:%S")
+    base_url <- "https://data.cincinnati-oh.gov/resource/gexm-h6bt.csv"
+    limit <- 1000
+    offset <- 0
+    all_new_rows <- list()
+    
+    # First, get total count for progress bar
+    count_url <- paste0(base_url, "?$select=count(*)&$where=", 
+                        URLencode(paste0("create_time_incident>'", latest_date, "'"), reserved = TRUE))
+    total_count <- tryCatch({
+      count_result <- read.csv(count_url, stringsAsFactors = FALSE)
+      as.numeric(count_result[1,1])
+    }, error = function(e) {
+      message("Could not get count, will fetch until no more records")
+      NA
+    })
+    
+    if (!is.na(total_count) && total_count > 0) {
+      message("Found ", total_count, " new CFS records to fetch")
+      pb <- progress::progress_bar$new(
+        format = " Fetching CFS [:bar] :percent (:current/:total) ETA: :eta",
+        total = ceiling(total_count / limit),
+        clear = FALSE,
+        width = 60
+      )
+    } else {
+      pb <- NULL
+    }
+    
+    repeat {
+      where_value <- paste0("create_time_incident>'", latest_date, "'")
+      socrata_url <- paste0(base_url, "?$where=", URLencode(where_value, reserved = TRUE), 
+                            "&$limit=", limit, "&$offset=", format(offset, scientific = FALSE))
+      
+      batch <- tryCatch(
+        read.csv(socrata_url, stringsAsFactors = FALSE, na.strings = c("", "NA")),
+        error = function(e) { 
+          message("Error fetching batch: ", e$message)
+          return(data.frame()) 
+        }
+      )
+      
+      if (nrow(batch) == 0) break
+      
+      all_new_rows[[length(all_new_rows) + 1]] <- batch
+      if (!is.null(pb)) pb$tick()
+      
+      offset <- offset + limit
+      if (nrow(batch) < limit) break
+    }
+    
+    if (!is.null(pb)) pb$terminate()
+
+    new_cfs <- bind_rows(all_new_rows)
+    
+    if (nrow(new_cfs) > 0) {
+      message("✓ Found ", nrow(new_cfs), " NEW CFS records")
+      
+      # Process new CFS records
+      new_cfs <- new_cfs %>%
+        clean_names() %>%
+        mutate(
+          create_time_incident = as.POSIXct(create_time_incident, format = "%Y-%m-%dT%H:%M:%S", tz = "America/New_York"),
+          closed_time_incident = as.POSIXct(closed_time_incident, format = "%Y-%m-%dT%H:%M:%S", tz = "America/New_York")
+        ) %>%
+        filter(
+          create_time_incident >= as.POSIXct("2025-07-28 00:00:00", tz = "America/New_York"),
+          !(disposition_text %in% c("USED CLEAR BUTTON", "CAN:CANCEL", "DUP: DUPLICATE", 
+                                    "TC:TRANSFERRED CALL", "26: AVAIL/DETAIL COMPLETED",
+                                    "TEST: TEST", "ERR: ERROR INCIDENT", "NOT NOT A DISPOSITION",
+                                    "UCPD DETAIL COMPLETE", "UCPD NO SERVICES RE", "NR:NO REPORT"))
+        )
+      
+      # Convert to spatial and match to centerlines
+      new_cfs_sf <- st_as_sf(new_cfs, coords = c("longitude_x", "latitude_x"), crs = 4326, remove = FALSE) %>%
+        st_transform(32616)
+      
+      # Load centerlines (only if we have new CFS to match)
+      message("Loading centerlines for new CFS...")
+      centerlines <- st_read(county_centerlines_geojson, quiet = TRUE) %>%
+        clean_names() %>%
+        mutate(
+          street_full = case_when(
+            !is.na(prefix) & prefix != "" ~ paste(toupper(trimws(prefix)), toupper(trimws(name)), toupper(trimws(suffix))),
+            TRUE ~ paste(toupper(trimws(name)), toupper(trimws(suffix)))
+          ),
+          street_full = trimws(street_full),
+          left_from = as.numeric(l_f_add),
+          left_to = as.numeric(l_t_add),
+          right_from = as.numeric(r_f_add),
+          right_to = as.numeric(r_t_add),
+          left_block_from = floor(left_from/100) * 100,
+          left_block_to = floor(left_to/100) * 100,
+          right_block_from = floor(right_from/100) * 100,
+          right_block_to = floor(right_to/100) * 100
+        ) %>%
+        filter(!is.na(street_full), street_full != "", (!is.na(left_from) | !is.na(right_from)))
+      
+      new_cfs_matched <- match_cfs_to_centerlines(new_cfs_sf, centerlines)
+      
+      # Ensure column consistency before combining
+      common_cols <- intersect(names(cfs_with_centerlines), names(new_cfs_matched))
+      
+      # Also check for geometry column type consistency
+      if (!"geometry" %in% common_cols && st_crs(cfs_with_centerlines) != st_crs(new_cfs_matched)) {
+        new_cfs_matched <- st_transform(new_cfs_matched, st_crs(cfs_with_centerlines))
+      }
+      
+      # Select only common columns from both
+      cfs_old <- cfs_with_centerlines %>% select(all_of(common_cols))
+      cfs_new <- new_cfs_matched %>% select(all_of(common_cols))
+      
+      # Combine with yesterday's cache
+      cfs_with_centerlines <- rbind(cfs_old, cfs_new)
+      message("✓ Combined: ", nrow(cfs_with_centerlines), " total CFS records")
+    } else {
+      message("✓ No new CFS records - using yesterday's cache as-is")
+    }
+    
+  } else {
+    # No cache exists - do full process (your existing code)
+    message("No cache found - processing from scratch...")
+    message("Loading calls for service data...")
+    cfs <- read_csv(
+      cfs_csv,
+      col_types = cols(
+        ADDRESS_X = col_character(),
+        AGENCY = col_character(),
+        DISPOSITION_TEXT = col_character(),
+        EVENT_NUMBER = col_character(),
+        INCIDENT_TYPE_ID = col_character(),
+        INCIDENT_TYPE_DESC = col_character(),
+        PRIORITY = col_integer(),
+        CREATE_TIME_INCIDENT = col_datetime(format = "%Y %b %d %H:%M:%S %p"),
+        ARRIVAL_TIME_PRIMARY_UNIT = col_datetime(format = "%Y %b %d %H:%M:%S %p"),
+        CLOSED_TIME_INCIDENT = col_datetime(format = "%Y %b %d %H:%M:%S %p"),
+        DISPATCH_TIME_PRIMARY_UNIT = col_datetime(format = "%Y %b %d %H:%M:%S %p"),
+        BEAT = col_character(),
+        DISTRICT = col_character(),
+        CPD_NEIGHBORHOOD = col_character(),
+        LATITUDE_X = col_double(),
+        LONGITUDE_X = col_double()
+      )
+    )
+    
+    cfs <- cfs %>%
       clean_names() %>%
       mutate(
-        address_x = as.character(address_x),
-        agency = as.character(agency),
-        disposition_text = as.character(disposition_text),
-        event_number = as.character(event_number),
-        incident_type_id = as.character(incident_type_id),
-        incident_type_desc = as.character(incident_type_desc),
-        priority = as.integer(priority),
-        create_time_incident = as.POSIXct(create_time_incident, format = "%Y-%m-%dT%H:%M:%S", tz = "America/New_York"),
-        arrival_time_primary_unit = as.POSIXct(arrival_time_primary_unit, format = "%Y-%m-%dT%H:%M:%S", tz = "America/New_York"),
-        closed_time_incident = as.POSIXct(closed_time_incident, format = "%Y-%m-%dT%H:%M:%S", tz = "America/New_York"),
-        dispatch_time_primary_unit = as.POSIXct(dispatch_time_primary_unit, format = "%Y-%m-%dT%H:%M:%S", tz = "America/New_York"),
-        beat = as.character(beat),
-        district = as.character(district),
-        cpd_neighborhood = as.character(cpd_neighborhood),
-        latitude_x = as.numeric(latitude_x),
-        longitude_x = as.numeric(longitude_x)
-      ) %>%
-      select(names(cfs))
+        create_time_incident = lubridate::force_tz(create_time_incident, "America/New_York"),
+        closed_time_incident = lubridate::force_tz(closed_time_incident, "America/New_York")
+      )
     
-    cfs <- bind_rows(cfs, new_rows)
-    message("✓ Combined with ", nrow(new_rows), " new records from API")
-  } else {
-    message("✓ No new CFS data available from API")
-  }
-  
-  # Add calculated columns
-  cfs <- cfs %>%
-    mutate(
-      time_to_close_mins = as.numeric(difftime(closed_time_incident, create_time_incident, units = "mins")),
-      time_before_arrival = as.numeric(difftime(arrival_time_primary_unit, create_time_incident, units = "mins")),
-      time_before_dispatch = as.numeric(difftime(dispatch_time_primary_unit, create_time_incident, units = "mins"))
+    # Load most recent CAD calls via Socrata API
+    message("Checking for new CFS data from Socrata API...")
+    latest_date <- format(max(cfs$create_time_incident, na.rm = TRUE), "%Y-%m-%dT%H:%M:%S")
+    base_url <- "https://data.cincinnati-oh.gov/resource/gexm-h6bt.csv"
+    limit <- 1000
+    offset <- 0
+    all_new_rows <- list()
+    
+    # Get total count for progress bar
+    count_url <- paste0(base_url, "?$select=count(*)&$where=", 
+                        URLencode(paste0("create_time_incident>'", latest_date, "'"), reserved = TRUE))
+    total_count <- tryCatch({
+      count_result <- read.csv(count_url, stringsAsFactors = FALSE)
+      as.numeric(count_result[1,1])
+    }, error = function(e) {
+      message("Could not get count, will fetch until no more records")
+      NA
+    })
+    
+    if (!is.na(total_count) && total_count > 0) {
+      message("Found ", total_count, " new CFS records to fetch from API")
+      pb <- progress::progress_bar$new(
+        format = " Fetching CFS [:bar] :percent (:current/:total) ETA: :eta",
+        total = ceiling(total_count / limit),
+        clear = FALSE,
+        width = 60
+      )
+    } else {
+      message("Checking API for new records...")
+      pb <- NULL
+    }
+    
+    repeat {
+      where_value <- paste0("create_time_incident>'", latest_date, "'")
+      socrata_url <- paste0(base_url, "?$where=", URLencode(where_value, reserved = TRUE), 
+                            "&$limit=", limit, "&$offset=", format(offset, scientific = FALSE))
+
+      batch <- tryCatch(
+        read.csv(socrata_url, stringsAsFactors = FALSE, na.strings = c("", "NA")),
+        error = function(e) {
+          message("Error fetching URL: ", e$message)
+          return(data.frame())
+        }
+      )
+
+      if (nrow(batch) == 0) {
+        break
+      }
+
+      all_new_rows[[length(all_new_rows) + 1]] <- batch
+      if (!is.null(pb)) pb$tick()
+      
+      offset <- offset + limit
+      if (nrow(batch) < limit) break
+    }
+    
+    if (!is.null(pb)) pb$terminate()
+
+    # If new rows exist, combine with static data
+    if (nrow(new_rows) > 0) {
+      message("Found ", nrow(new_rows), " new CFS records from API")
+      
+      new_rows <- new_rows %>%
+        clean_names() %>%
+        mutate(
+          address_x = as.character(address_x),
+          agency = as.character(agency),
+          disposition_text = as.character(disposition_text),
+          event_number = as.character(event_number),
+          incident_type_id = as.character(incident_type_id),
+          incident_type_desc = as.character(incident_type_desc),
+          priority = as.integer(priority),
+          create_time_incident = as.POSIXct(create_time_incident, format = "%Y-%m-%dT%H:%M:%S", tz = "America/New_York"),
+          arrival_time_primary_unit = as.POSIXct(arrival_time_primary_unit, format = "%Y-%m-%dT%H:%M:%S", tz = "America/New_York"),
+          closed_time_incident = as.POSIXct(closed_time_incident, format = "%Y-%m-%dT%H:%M:%S", tz = "America/New_York"),
+          dispatch_time_primary_unit = as.POSIXct(dispatch_time_primary_unit, format = "%Y-%m-%dT%H:%M:%S", tz = "America/New_York"),
+          beat = as.character(beat),
+          district = as.character(district),
+          cpd_neighborhood = as.character(cpd_neighborhood),
+          latitude_x = as.numeric(latitude_x),
+          longitude_x = as.numeric(longitude_x)
+        ) %>%
+        select(names(cfs))
+      
+      cfs <- bind_rows(cfs, new_rows)
+      message("✓ Combined with ", nrow(new_rows), " new records from API")
+    } else {
+      message("✓ No new CFS data available from API")
+    }
+    
+    # Add calculated columns
+    cfs <- cfs %>%
+      mutate(
+        time_to_close_mins = as.numeric(difftime(closed_time_incident, create_time_incident, units = "mins")),
+        time_before_arrival = as.numeric(difftime(arrival_time_primary_unit, create_time_incident, units = "mins")),
+        time_before_dispatch = as.numeric(difftime(dispatch_time_primary_unit, create_time_incident, units = "mins"))
+      )
+    
+    # Filter to relevant calls since Skydio launch
+    cfs_since_launch <- cfs %>%  
+      filter(
+        create_time_incident >= as.POSIXct("2025-07-28 00:00:00", tz = "America/New_York")
+      ) %>%
+      filter(
+        !(disposition_text %in% c(
+          "USED CLEAR BUTTON", "CAN:CANCEL", "DUP: DUPLICATE", 
+          "TC:TRANSFERRED CALL", "26: AVAIL/DETAIL COMPLETED",
+          "TEST: TEST", "ERR: ERROR INCIDENT", "NOT NOT A DISPOSITION",
+          "UCPD DETAIL COMPLETE", "UCPD NO SERVICES RE", "NR:NO REPORT"
+        ))
+      ) %>%
+      arrange(create_time_incident)
+    
+    # Convert to spatial
+    cfs_sf <- st_as_sf(
+      cfs_since_launch,
+      coords = c("longitude_x", "latitude_x"),
+      crs = 4326,
+      remove = FALSE
     )
-  
-  # Filter to relevant calls since Skydio launch
-  cfs_since_launch <- cfs %>%  
-    filter(
-      create_time_incident >= as.POSIXct("2025-07-28 00:00:00", tz = "America/New_York")
-    ) %>%
-    filter(
-      !(disposition_text %in% c(
-        "USED CLEAR BUTTON", "CAN:CANCEL", "DUP: DUPLICATE", 
-        "TC:TRANSFERRED CALL", "26: AVAIL/DETAIL COMPLETED",
-        "TEST: TEST", "ERR: ERROR INCIDENT", "NOT NOT A DISPOSITION",
-        "UCPD DETAIL COMPLETE", "UCPD NO SERVICES RE", "NR:NO REPORT"
-      ))
-    ) %>%
-    arrange(create_time_incident)
-  
-  # Convert to spatial
-  cfs_sf <- st_as_sf(
-    cfs_since_launch,
-    coords = c("longitude_x", "latitude_x"),
-    crs = 4326,
-    remove = FALSE
-  )
-  cfs_sf <- st_transform(cfs_sf, 32616)  # UTM zone 16N
-  
-  message("Loading centerlines data...")
-  centerlines <- st_read(county_centerlines_geojson, quiet = TRUE)
-  
-  centerlines_clean <- centerlines %>%
-    janitor::clean_names() %>%
-    mutate(
-      street_full = case_when(
-        !is.na(prefix) & prefix != "" ~ paste(toupper(trimws(prefix)), toupper(trimws(name)), toupper(trimws(suffix))),
-        TRUE ~ paste(toupper(trimws(name)), toupper(trimws(suffix)))
-      ),
-      street_full = trimws(street_full),
-      left_from = as.numeric(l_f_add),
-      left_to = as.numeric(l_t_add),
-      right_from = as.numeric(r_f_add),
-      right_to = as.numeric(r_t_add),
-      left_block_from = floor(left_from/100) * 100,
-      left_block_to = floor(left_to/100) * 100,
-      right_block_from = floor(right_from/100) * 100,
-      right_block_to = floor(right_to/100) * 100
-    ) %>%
-    filter(!is.na(street_full), street_full != "",
-           (!is.na(left_from) | !is.na(right_from)))
-  
-  ### MATCH CFS TO CENTERLINES
-  
-  cfs_with_centerlines <- match_cfs_to_centerlines(cfs_sf, centerlines_clean)
-  
-  # Save the processed CFS data with today's date
-  message("💾 Saving processed CFS data to cache: ", cfs_cache_file)
-  saveRDS(cfs_with_centerlines, cfs_cache_file)
-  message("✓ Cache saved - future runs today will be much faster!")
-  
-  # Clean up old cache files (optional - keeps only today's)
-  old_cache_files <- list.files(
-    path = dirname(cfs_cache_file),
-    pattern = "^cfs_with_centerlines_.*\\.rds$",
-    full.names = TRUE
-  )
-  old_cache_files <- old_cache_files[old_cache_files != cfs_cache_file]
-  if (length(old_cache_files) > 0) {
-    message("🗑️  Removing ", length(old_cache_files), " old cache file(s)")
-    file.remove(old_cache_files)
+    cfs_sf <- st_transform(cfs_sf, 32616)  # UTM zone 16N
+    
+    message("Loading centerlines data...")
+    centerlines <- st_read(county_centerlines_geojson, quiet = TRUE)
+    
+    centerlines_clean <- centerlines %>%
+      janitor::clean_names() %>%
+      mutate(
+        street_full = case_when(
+          !is.na(prefix) & prefix != "" ~ paste(toupper(trimws(prefix)), toupper(trimws(name)), toupper(trimws(suffix))),
+          TRUE ~ paste(toupper(trimws(name)), toupper(trimws(suffix)))
+        ),
+        street_full = trimws(street_full),
+        left_from = as.numeric(l_f_add),
+        left_to = as.numeric(l_t_add),
+        right_from = as.numeric(r_f_add),
+        right_to = as.numeric(r_t_add),
+        left_block_from = floor(left_from/100) * 100,
+        left_block_to = floor(left_to/100) * 100,
+        right_block_from = floor(right_from/100) * 100,
+        right_block_to = floor(right_to/100) * 100
+      ) %>%
+      filter(!is.na(street_full), street_full != "",
+             (!is.na(left_from) | !is.na(right_from)))
+    
+    ### MATCH CFS TO CENTERLINES
+    
+    cfs_with_centerlines <- match_cfs_to_centerlines(cfs_sf, centerlines_clean)
+    
+    # Save the processed CFS data with today's date
+    message("💾 Saving processed CFS data to cache: ", cfs_cache_file)
+    saveRDS(cfs_with_centerlines, cfs_cache_file)
+    message("✓ Cache saved - future runs today will be much faster!")
+    
+    # Clean up old cache files (optional - keeps only today's)
+    old_cache_files <- list.files(
+      path = dirname(cfs_cache_file),
+      pattern = "^cfs_with_centerlines_.*\\.rds$",
+      full.names = TRUE
+    )
+    old_cache_files <- old_cache_files[old_cache_files != cfs_cache_file]
+    if (length(old_cache_files) > 0) {
+      message("🗑️  Removing ", length(old_cache_files), " old cache file(s)")
+      file.remove(old_cache_files)
+    }
   }
 }
 
-### LOAD FLIGHT DATA
-
-message("Loading flight data...")
-flights_sf <- st_read(flight_paths_geojson, quiet = TRUE)
-flights_sf$takeoff <- as.POSIXct(flights_sf$takeoff / 1000, origin = "1970-01-01", tz = "America/New_York")
-flights_sf$landing <- as.POSIXct(flights_sf$landing / 1000, origin = "1970-01-01", tz = "America/New_York")
-
-# Clean names and select columns (same as cfs.R)
-flights_sf <- flights_sf %>% 
-  clean_names() %>%
-  select(
-    flight_id,
-    object_id,
-    takeoff,
-    landing,
-    flight_purpose,
-    geometry
-  )
-
-# Remove duplicates
-flights_sf <- flights_sf %>% distinct(flight_id, .keep_all = TRUE)
-
-message("✓ Loaded ", nrow(flights_sf), " flights")
-
-# Project to UTM for accurate buffering (same as cfs.R)
-flights_sf <- st_transform(flights_sf, 32616)
-
-### MATCH FLIGHTS TO CFS
-
-matches <- match_flights_to_cfs(
-  cfs_with_centerlines, 
-  flights_sf, 
-  buffer_distance = 50, 
-  time_window_mins = 10
+# Clean up old CFS caches (keep last 7 days)
+all_cache_files <- list.files(
+  path = "./whats-that-drone/data",
+  pattern = "^cfs_with_centerlines_.*\\.rds$",
+  full.names = TRUE
 )
 
-if (is.null(matches) || nrow(matches) == 0) {
-  message("⚠️  No CFS matches found - flight_purpose will remain unchanged")
-} else {
-  message("✓ Found ", nrow(matches), " flight-to-CFS matches")
-  
-  # Update flight_purpose in flights_sf
-  flights_sf <- flights_sf %>%
-    left_join(
-      matches %>% select(flight_id, incident_type),
-      by = c("object_id" = "flight_id")
-    ) %>%
+if (length(all_cache_files) > 7) {
+  # Sort by date, keep newest 7
+  file_dates <- as.Date(gsub(".*_(\\d{8})\\.rds$", "\\1", all_cache_files), "%Y%m%d")
+  old_files <- all_cache_files[order(file_dates)][1:(length(all_cache_files) - 7)]
+  file.remove(old_files)
+  message("🗑️  Removed ", length(old_files), " old cache files")
+}
+
+### LOAD FLIGHT DATA - INCREMENTAL APPROACH
+message("Loading flight data...")
+all_flights <- st_read(flight_paths_geojson, quiet = TRUE) %>%
+  clean_names() %>%
+  mutate(
+    takeoff = as.POSIXct(takeoff / 1000, origin = "1970-01-01", tz = "America/New_York"),
+    landing = as.POSIXct(landing / 1000, origin = "1970-01-01", tz = "America/New_York")
+  )
+
+# Load previously matched flights
+if (file.exists(previous_matched_file)) {
+  message("✓ Found previous matched flights")
+  previous_flights <- st_read(previous_matched_file, quiet = TRUE) %>%
+    clean_names() %>%
     mutate(
-      flight_purpose = coalesce(incident_type, flight_purpose)
-    ) %>%
-    select(-incident_type)
+      takeoff = as.POSIXct(takeoff / 1000, origin = "1970-01-01", tz = "America/New_York"),
+      landing = as.POSIXct(landing / 1000, origin = "1970-01-01", tz = "America/New_York")
+    )
   
-  updated_count <- sum(!is.na(matches$incident_type))
-  message("✓ Updated flight_purpose for ", updated_count, " flights")
+  # Find NEW flights (not in previous matched file)
+  new_flight_ids <- setdiff(all_flights$flight_id, previous_flights$flight_id)
+  
+  if (length(new_flight_ids) > 0) {
+    message("✓ Found ", length(new_flight_ids), " NEW flights to match")
+    
+    new_flights <- all_flights %>%
+      filter(flight_id %in% new_flight_ids) %>%
+      select(flight_id, object_id, takeoff, landing, flight_purpose, geometry) %>%
+      distinct(flight_id, .keep_all = TRUE) %>%
+      st_transform(32616)
+    
+    # Match ONLY the new flights
+    new_matches <- match_flights_to_cfs(cfs_with_centerlines, new_flights, 
+                                        buffer_distance = 50, time_window_mins = 10)
+    
+    if (!is.null(new_matches) && nrow(new_matches) > 0) {
+      new_flights <- new_flights %>%
+        left_join(new_matches %>% select(flight_id, incident_type), 
+                  by = c("object_id" = "flight_id")) %>%
+        mutate(flight_purpose = coalesce(incident_type, flight_purpose)) %>%
+        select(-incident_type)
+      
+      message("✓ Matched ", nrow(new_matches), " new flights to CFS")
+    }
+    
+    # Combine with previous flights
+    new_flights <- st_transform(new_flights, 4326)
+    all_matched_flights <- rbind(previous_flights, new_flights)
+    message("✓ Total flights: ", nrow(all_matched_flights))
+    
+  } else {
+    message("✓ No new flights - using previous matched flights")
+    all_matched_flights <- previous_flights
+  }
+  
+} else {
+  message("No previous matched flights - matching all flights")
+  # Match all flights (first run)
+  flights_sf <- all_flights %>%
+    select(flight_id, object_id, takeoff, landing, flight_purpose, geometry) %>%
+    distinct(flight_id, .keep_all = TRUE) %>%
+    st_transform(32616)
+  
+  matches <- match_flights_to_cfs(cfs_with_centerlines, flights_sf, 
+                                  buffer_distance = 50, time_window_mins = 10)
+  
+  if (!is.null(matches) && nrow(matches) > 0) {
+    flights_sf <- flights_sf %>%
+      left_join(matches %>% select(flight_id, incident_type), 
+                by = c("object_id" = "flight_id")) %>%
+      mutate(flight_purpose = coalesce(incident_type, flight_purpose)) %>%
+      select(-incident_type)
+  }
+  
+  all_matched_flights <- st_transform(flights_sf, 4326)
 }
 
 ### SAVE UPDATED FLIGHT DATA
-
-# Transform back to WGS84 for output
-flights_sf <- st_transform(flights_sf, 4326)
-
-# Convert timestamps back to milliseconds for consistency
-flights_sf <- flights_sf %>%
+all_matched_flights <- all_matched_flights %>%
   mutate(
     takeoff = as.numeric(takeoff) * 1000,
     landing = as.numeric(landing) * 1000
   ) %>%
   select(flight_id, takeoff, landing, flight_purpose, geometry)
 
-# Save to new file
-output_file <- "./whats-that-drone/data/flight_paths_matched.geojson"
-st_write(flights_sf, output_file, delete_dsn = TRUE)
+st_write(all_matched_flights, previous_matched_file, delete_dsn = TRUE)
 
-message("✓ Created ", output_file, " with CFS-matched flight purposes")
-message("✓ Stripped to essential fields: flight_id, takeoff, landing, flight_purpose, geometry")
-message("✓ Run gen_flight_geojson.R next to create the web-ready GeoJSON")
+message("✓ Saved ", nrow(all_matched_flights), " matched flights")
+message("✓ Run gen_flight_geojson.R next")
