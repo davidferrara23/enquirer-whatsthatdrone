@@ -389,6 +389,11 @@ if (file.exists(cfs_cache_file)) {
       message("✓ No new CFS records - using yesterday's cache as-is")
     }
     
+    # Save today's cache (whether we added new records or not)
+    message("💾 Saving today's CFS cache: ", cfs_cache_file)
+    saveRDS(cfs_with_centerlines, cfs_cache_file)
+    message("✓ Cache saved for ", today_date)
+    
   } else {
     # No cache exists - do full process (your existing code)
     message("No cache found - processing from scratch...")
@@ -576,21 +581,11 @@ if (file.exists(cfs_cache_file)) {
     saveRDS(cfs_with_centerlines, cfs_cache_file)
     message("✓ Cache saved - future runs today will be much faster!")
     
-    # Clean up old cache files (optional - keeps only today's)
-    old_cache_files <- list.files(
-      path = dirname(cfs_cache_file),
-      pattern = "^cfs_with_centerlines_.*\\.rds$",
-      full.names = TRUE
-    )
-    old_cache_files <- old_cache_files[old_cache_files != cfs_cache_file]
-    if (length(old_cache_files) > 0) {
-      message("🗑️  Removing ", length(old_cache_files), " old cache file(s)")
-      file.remove(old_cache_files)
-    }
+    # Don't delete old caches here - do it at the end
   }
 }
 
-# Clean up old CFS caches (keep last 7 days)
+# Clean up old CFS caches (keep last 7 days) - MOVED TO AFTER cache is saved
 all_cache_files <- list.files(
   path = "./whats-that-drone/data",
   pattern = "^cfs_with_centerlines_.*\\.rds$",
@@ -627,6 +622,15 @@ if (file.exists(previous_matched_file)) {
   # Find NEW flights (not in previous matched file)
   new_flight_ids <- setdiff(all_flights$flight_id, previous_flights$flight_id)
   
+  # Also check if we have NEW CFS data that might match OLD flights
+  # Compare today's CFS count vs yesterday's
+  yesterday_cfs_count <- if (exists("yesterday_cache") && file.exists(yesterday_cache)) {
+    nrow(readRDS(yesterday_cache))
+  } else {
+    0
+  }
+  current_cfs_count <- nrow(cfs_with_centerlines)
+  
   if (length(new_flight_ids) > 0) {
     message("✓ Found ", length(new_flight_ids), " NEW flights to match")
     
@@ -644,7 +648,10 @@ if (file.exists(previous_matched_file)) {
       new_flights <- new_flights %>%
         left_join(new_matches %>% select(flight_id, incident_type), 
                   by = c("object_id" = "flight_id")) %>%
-        mutate(flight_purpose = coalesce(incident_type, flight_purpose)) %>%
+        mutate(
+          # Don't use coalesce - overwrite with match or reset to default
+          flight_purpose = if_else(!is.na(incident_type), incident_type, "Call for Service")
+        ) %>%
         select(-incident_type)
       
       message("✓ Matched ", nrow(new_matches), " new flights to CFS")
@@ -655,8 +662,33 @@ if (file.exists(previous_matched_file)) {
     all_matched_flights <- rbind(previous_flights, new_flights)
     message("✓ Total flights: ", nrow(all_matched_flights))
     
+  } else if (current_cfs_count > yesterday_cfs_count) {
+    message("✓ No new flights, but ", current_cfs_count - yesterday_cfs_count, " new CFS records")
+    message("   Re-matching ALL flights to capture new CFS matches...")
+    
+    # Re-match everything when new CFS data arrives
+    flights_sf <- all_flights %>%
+      select(flight_id, object_id, takeoff, landing, geometry) %>%
+      mutate(flight_purpose = "Call for Service") %>%  # Reset all to default
+      distinct(flight_id, .keep_all = TRUE) %>%
+      st_transform(32616)
+    
+    matches <- match_flights_to_cfs(cfs_with_centerlines, flights_sf, 
+                                    buffer_distance = 50, time_window_mins = 10)
+    
+    if (!is.null(matches) && nrow(matches) > 0) {
+      flights_sf <- flights_sf %>%
+        left_join(matches %>% select(flight_id, incident_type), 
+                  by = c("object_id" = "flight_id")) %>%
+        mutate(flight_purpose = if_else(!is.na(incident_type), incident_type, "Call for Service")) %>%
+        select(-incident_type)
+    }
+    
+    all_matched_flights <- st_transform(flights_sf, 4326)
+    message("✓ Re-matched all flights")
+    
   } else {
-    message("✓ No new flights - using previous matched flights")
+    message("✓ No new flights or CFS - using previous matched flights")
     all_matched_flights <- previous_flights
   }
   
