@@ -321,6 +321,66 @@
             color: #FFBE23;
         }
         
+        .share-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .share-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: 'Unify Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            color: white;
+        }
+        
+        .share-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .share-btn.facebook {
+            background: #1877F2;
+        }
+        
+        .share-btn.facebook:hover {
+            background: #166FE5;
+        }
+        
+        .share-btn.twitter {
+            background: #000000;
+        }
+        
+        .share-btn.twitter:hover {
+            background: #333333;
+        }
+        
+        .share-btn.reddit {
+            background: #FF4500;
+        }
+        
+        .share-btn.reddit:hover {
+            background: #E63E00;
+        }
+        
+        .share-btn.link {
+            background: #7f8c8d;
+        }
+        
+        .share-btn.link:hover {
+            background: #6c7a7b;
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 1.5em;
@@ -378,6 +438,9 @@
                         <option value="300" selected>300 feet (~1 football field)</option>
                         <option value="500">500 feet (~2 city blocks)</option>
                         <option value="1000">1,000 feet (~3 city blocks)</option>
+                        <option value="2500">2,500 feet (~½ mile)</option>
+                        <option value="5000">5,000 feet (~1 mile)</option>
+                        <option value="10000">10,000 feet (~2 miles / whole neighborhood)</option>
                     </select>
                 </div>
             </div>
@@ -406,6 +469,36 @@
                     <span class="stat-value" id="topPurpose" style="font-size: 14px;">-</span>
                 </div>
             </div>
+            
+            <div class="share-buttons" id="shareButtons" style="display: none;">
+                <span style="color: #7f8c8d; font-size: 14px; align-self: center;">Share your results:</span>
+                <button class="share-btn facebook" onclick="shareToFacebook()">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.326H9.25V16c3.824-.604 6.75-3.934 6.75-7.951z"/>
+                    </svg>
+                    Facebook
+                </button>
+                <button class="share-btn twitter" onclick="shareToTwitter()">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M12.6.75h2.454l-5.36 6.142L16 15.25h-4.937l-3.867-5.07-4.425 5.07H.316l5.733-6.57L0 .75h5.063l3.495 4.633L12.601.75Zm-.86 13.028h1.36L4.323 2.145H2.865l8.875 11.633Z"/>
+                    </svg>
+                    X (Twitter)
+                </button>
+                <button class="share-btn reddit" onclick="shareToReddit()">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M6.167 8a.831.831 0 0 0-.83.83c0 .459.372.84.83.831a.831.831 0 0 0 0-1.661zm1.843 3.647c.315 0 1.403-.038 1.976-.611a.232.232 0 0 0 0-.306.213.213 0 0 0-.306 0c-.353.363-1.126.487-1.67.487-.545 0-1.308-.124-1.671-.487a.213.213 0 0 0-.306 0 .213.213 0 0 0 0 .306c.564.563 1.652.611 1.977.611zm.992-2.807c0 .458.373.83.831.83.458 0 .83-.381.83-.83a.831.831 0 0 0-1.66 0z"/>
+                        <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.828-1.165c-.315 0-.602.124-.812.325-.801-.573-1.9-.945-3.121-.993l.534-2.501 1.738.372a.83.83 0 1 0 .83-.869.83.83 0 0 0-.744.468l-1.938-.41a.203.203 0 0 0-.153.028.186.186 0 0 0-.086.134l-.592 2.788c-1.24.038-2.358.41-3.17.992-.21-.2-.496-.324-.81-.324a1.163 1.163 0 0 0-.478 2.224c-.02.115-.029.23-.029.353 0 1.795 2.091 3.256 4.669 3.256 2.577 0 4.668-1.451 4.668-3.256 0-.114-.01-.238-.029-.353.401-.181.688-.592.688-1.069 0-.65-.525-1.165-1.165-1.165z"/>
+                    </svg>
+                    Reddit
+                </button>
+                <button class="share-btn link" onclick="copyLink()">
+                    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M4.715 6.542 3.343 7.914a3 3 0 1 0 4.243 4.243l1.828-1.829A3 3 0 0 0 8.586 5.5L8 6.086a1.002 1.002 0 0 0-.154.199 2 2 0 0 1 .861 3.337L6.88 11.45a2 2 0 1 1-2.83-2.83l.793-.792a4.018 4.018 0 0 1-.128-1.287z"/>
+                        <path d="M6.586 4.672A3 3 0 0 0 7.414 9.5l.775-.776a2 2 0 0 1-.896-3.346L9.12 3.55a2 2 0 1 1 2.83 2.83l-.793.792c.112.42.155.855.128 1.287l1.372-1.372a3 3 0 1 0-4.243-4.243L6.586 4.672z"/>
+                    </svg>
+                    Copy Link
+                </button>
+            </div>
         </div>
         
         <div id="map"></div>
@@ -425,7 +518,7 @@
             <a href="https://github.com/davidferrara23/enquirer-whatsthatdrone" target="_blank" rel="noopener noreferrer">
                 📄 View the code
             </a>
-            <a href="https://cincinnati.com/article/here" target="_blank" rel="noopener noreferrer">
+            <a href="https://www.cincinnati.com/story/news/crime/2025/12/11/look-up-cincinnati-police-drone-flights-near-your-home-address-here/87605065007/" target="_blank" rel="noopener noreferrer">
                 ❓ How does this work?
             </a>
             <br>
@@ -655,12 +748,14 @@
             if (flights.length === 0) {
                 resultsBox.classList.remove('show');
                 flightList.classList.remove('show');
+                document.getElementById('shareButtons').style.display = 'none';
                 showError('No flights found within the search radius');
                 return;
             }
 
             resultsBox.classList.add('show');
             flightList.classList.add('show');
+            document.getElementById('shareButtons').style.display = 'flex';
 
             const now = new Date();
             
@@ -699,7 +794,6 @@
                 purposes[purpose] = (purposes[purpose] || 0) + 1;
             });
             
-            // Filter out "Unknown" when finding top purpose
             const purposesWithoutUnknown = Object.entries(purposes).filter(([key]) => key !== 'Unknown');
             const topPurpose = purposesWithoutUnknown.length > 0 
                 ? purposesWithoutUnknown.sort((a, b) => b[1] - a[1])[0]
@@ -709,7 +803,21 @@
             document.getElementById('closestFlight').textContent = `${flights[0].distanceFeet.toFixed(0)} feet`;
             document.getElementById('mostRecent').textContent = recentText;
             document.getElementById('totalTime').textContent = `${Math.round(totalMinutes)} mins`;
-            document.getElementById('topPurpose').textContent = `${topPurpose[0]} (${topPurpose[1]})`;
+            
+            const topPurposeEl = document.getElementById('topPurpose');
+            if (topPurpose[0] === 'Unknown') {
+                topPurposeEl.innerHTML = `
+                    <span class="purpose-tooltip">
+                        ${topPurpose[0]} (${topPurpose[1]}) <span style="font-size: 11px; color: #009BFF;">(why?)</span>
+                        <span class="tooltiptext">
+                            Cincinnati police do not publish the purpose for each drone flight. We approximate purposes by matching police calls that occurred near drone flights at the same time and place. Flights marked "Unknown" did not match to a specific incident.
+                            <a href="https://www.cincinnati.com/story/news/crime/2025/12/11/look-up-cincinnati-police-drone-flights-near-your-home-address-here/87605065007/" target="_blank">Learn more about our methodology.</a>
+                        </span>
+                    </span>
+                `;
+            } else {
+                topPurposeEl.textContent = `${topPurpose[0]} (${topPurpose[1]})`;
+            }
             
             const radiusMeters = radiusFeet * 0.3048;
             flights.forEach(flight => {
@@ -741,8 +849,8 @@
                         ${flight.purpose !== 'Unknown' ? `
                             <span class="purpose-tooltip">📍 ${flight.purpose}
                                 <span class="tooltiptext">
-                                    Flight purposes are approximated by matching police calls for service that occurred nearby to drone flights in time and location. Flights labeled "Unknown" did not match to a specific incident type.
-                                    <a href="https://cincinnati.com/methodology" target="_blank">Learn more about our methodology.</a>
+                                    Cincinnati police do not publish the purpose for each drone flight. We approximate purposes by matching police calls that occurred near drone flights at the same time and place. Flights without a purpose did not match to a specific incident.
+                                    <a href="https://www.cincinnati.com/story/news/crime/2025/12/11/look-up-cincinnati-police-drone-flights-near-your-home-address-here/87605065007/" target="_blank">Learn more about our methodology.</a>
                                 </span>
                             </span>
                         ` : ''}
@@ -774,6 +882,86 @@
             a.download = 'drone_flights_' + new Date().toISOString().slice(0,10) + '.csv';
             a.click();
             window.URL.revokeObjectURL(url);
+        }
+
+        const SHARE_URL = 'https://www.cincinnati.com/story/news/crime/2025/12/11/look-up-cincinnati-police-drone-flights-near-your-home-address-here/87605065007/';
+        
+        function getShareText() {
+            const address = document.getElementById('addressInput').value;
+            const totalFlights = document.getElementById('totalFlights').textContent;
+            const closestFlight = document.getElementById('closestFlight').textContent;
+            
+            return `I found ${totalFlights} Cincinnati police drone flight${totalFlights === '1' ? '' : 's'} near ${address}. The closest was ${closestFlight} away. Check yours at Cincinnati Enquirer:`;
+        }
+        
+        function shareToFacebook() {
+            // Facebook doesn't support pre-filled text anymore, just the URL
+            const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(SHARE_URL)}`;
+            window.open(facebookUrl, '_blank', 'width=600,height=400');
+        }
+        
+        function shareToTwitter() {
+            const text = getShareText();
+            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(SHARE_URL)}`;
+            window.open(twitterUrl, '_blank', 'width=600,height=400');
+        }
+        
+        function shareToReddit() {
+            const text = getShareText();
+            const redditUrl = `https://reddit.com/submit?url=${encodeURIComponent(SHARE_URL)}&title=${encodeURIComponent(text)}`;
+            window.open(redditUrl, '_blank', 'width=800,height=600');
+        }
+        
+        function copyLink() {
+            const text = getShareText() + ' ' + SHARE_URL;
+            
+            // Try modern clipboard API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    const btn = event.target.closest('.share-btn');
+                    const originalHTML = btn.innerHTML;
+                    btn.innerHTML = '<svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg> Copied!';
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                    }, 2000);
+                }).catch(err => {
+                    // Fall back to old method
+                    fallbackCopyText(text);
+                });
+            } else {
+                // Fall back to old method
+                fallbackCopyText(text);
+            }
+        }
+        
+        function fallbackCopyText(text) {
+            // Create temporary textarea
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textarea);
+                
+                if (successful) {
+                    const btn = event.target.closest('.share-btn');
+                    const originalHTML = btn.innerHTML;
+                    btn.innerHTML = '<svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg> Copied!';
+                    setTimeout(() => {
+                        btn.innerHTML = originalHTML;
+                    }, 2000);
+                } else {
+                    throw new Error('Copy command failed');
+                }
+            } catch (err) {
+                document.body.removeChild(textarea);
+                // Show a prompt with the text to copy manually
+                prompt('Copy this text:', text);
+            }
         }
     </script>
 </body>
