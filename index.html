@@ -431,8 +431,15 @@
             }
             
             .purpose-tooltip .tooltiptext {
-                width: 250px;
-                margin-left: -125px;
+                width: 280px;
+                left: 50%;
+                right: auto;
+                margin-left: -140px;
+                max-width: calc(100vw - 40px);
+            }
+            
+            .purpose-tooltip .tooltiptext::after {
+                left: 50%;
             }
             
             .result-stats {
@@ -464,6 +471,37 @@
             
             .option-group label {
                 font-size: 12px;
+            }
+            
+            .purpose-tooltip .tooltiptext {
+                width: 260px;
+                margin-left: -130px;
+                font-size: 12px;
+                padding: 10px;
+            }
+        }
+
+        /* Prevent tooltip from going off-screen - smart positioning */
+        @media (max-width: 768px) {
+            .flight-item .purpose-tooltip .tooltiptext {
+                /* For tooltips in flight list, align to left edge to avoid clipping */
+                left: 0 !important;
+                right: auto !important;
+                margin-left: 0 !important;
+                transform: translateX(0) !important;
+            }
+            
+            .flight-item .purpose-tooltip .tooltiptext::after {
+                left: 20px !important;
+                margin-left: 0 !important;
+            }
+            
+            .stat .purpose-tooltip .tooltiptext {
+                /* For top purpose stat, keep centered but constrain */
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                margin-left: 0 !important;
+                max-width: calc(100vw - 40px) !important;
             }
         }
     </style>
@@ -533,7 +571,7 @@
                 <span style="color: #7f8c8d; font-size: 14px; align-self: center;">Share your results:</span>
                 <button class="share-btn facebook" onclick="shareToFacebook()">
                     <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.326H9.25V16c3.824-.604 6.75-3.934 6.75-7.951z"/>
+                        <path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.049c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.049H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.326H9.25V16c3.824-.604 6.75-3.934 6.75-7.951z"/>
                     </svg>
                     Facebook
                 </button>
