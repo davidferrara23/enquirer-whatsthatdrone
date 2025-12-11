@@ -1,4 +1,4 @@
 data/*
 logs/*
 *.log
-*.py
+update.py
