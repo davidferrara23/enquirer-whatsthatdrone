@@ -655,10 +655,32 @@ if (file.exists(previous_matched_file)) {
         select(-incident_type)
       
       message("✓ Matched ", nrow(new_matches), " new flights to CFS")
+    } else {
+      # No matches - just update flight_purpose to default
+      new_flights <- new_flights %>%
+        mutate(flight_purpose = "Call for Service")
+      message("✓ No matches found for new flights - set to 'Call for Service'")
     }
     
-    # Combine with previous flights
+    # Ensure both dataframes have same columns before rbind
     new_flights <- st_transform(new_flights, 4326)
+    
+    # Select same columns in both (in case previous_flights has extra columns)
+    common_cols <- c("flight_id", "object_id", "takeoff", "landing", "flight_purpose", "geometry")
+    
+    # Make sure both have all needed columns
+    for (col in common_cols) {
+      if (!col %in% names(previous_flights)) {
+        previous_flights[[col]] <- NA
+      }
+      if (!col %in% names(new_flights)) {
+        new_flights[[col]] <- NA
+      }
+    }
+    
+    previous_flights <- previous_flights %>% select(all_of(common_cols))
+    new_flights <- new_flights %>% select(all_of(common_cols))
+    
     all_matched_flights <- rbind(previous_flights, new_flights)
     message("✓ Total flights: ", nrow(all_matched_flights))
     
