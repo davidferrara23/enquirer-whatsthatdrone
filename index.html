@@ -100,11 +100,13 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            flex-wrap: nowrap;
         }
         
         .option-group label {
             color: #7f8c8d;
             font-size: 14px;
+            white-space: nowrap;
         }
         
         select, input[type="number"] {
@@ -113,6 +115,7 @@
             border-radius: 6px;
             font-size: 14px;
             font-family: 'Unify Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            min-width: 100px;
         }
         
         .results-box {
@@ -394,8 +397,33 @@
                 width: 100%;
             }
             
+            input[type="text"]::placeholder {
+                font-size: 14px;
+            }
+            
             .search-btn {
                 width: 100%;
+            }
+            
+            .options-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .option-group {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .option-group label {
+                font-size: 13px;
+            }
+            
+            select {
+                flex: 1;
+                min-width: 120px;
+                font-size: 13px;
             }
             
             #map {
@@ -405,6 +433,37 @@
             .purpose-tooltip .tooltiptext {
                 width: 250px;
                 margin-left: -125px;
+            }
+            
+            .result-stats {
+                gap: 15px;
+            }
+            
+            .stat-value {
+                font-size: 20px;
+            }
+            
+            .share-buttons {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .search-box {
+                padding: 15px;
+            }
+            
+            input[type="text"]::placeholder {
+                font-size: 13px;
+            }
+            
+            select {
+                font-size: 12px;
+                padding: 6px 8px;
+            }
+            
+            .option-group label {
+                font-size: 12px;
             }
         }
     </style>
@@ -421,7 +480,7 @@
                 <input 
                     type="text" 
                     id="addressInput" 
-                    placeholder="Enter your Cincinnati address (e.g., 801 Plum St)"
+                    placeholder="Enter your address (e.g., 801 Plum St)"
                     onkeypress="if(event.key==='Enter') searchAddress()"
                 />
                 <button class="search-btn" onclick="searchAddress()" id="searchBtn">
@@ -433,14 +492,14 @@
                 <div class="option-group">
                     <label for="radiusInput">Search Radius:</label>
                     <select id="radiusInput">
-                        <option value="100">100 feet (~30m)</option>
-                        <option value="200">200 feet (~1 city block)</option>
-                        <option value="300" selected>300 feet (~1 football field)</option>
-                        <option value="500">500 feet (~2 city blocks)</option>
-                        <option value="1000">1,000 feet (~3 city blocks)</option>
-                        <option value="2500">2,500 feet (~½ mile)</option>
-                        <option value="5000">5,000 feet (~1 mile)</option>
-                        <option value="10000">10,000 feet (~2 miles / whole neighborhood)</option>
+                        <option value="100">100 ft</option>
+                        <option value="200">200 ft</option>
+                        <option value="300" selected>300 ft</option>
+                        <option value="500">500 ft</option>
+                        <option value="1000">1,000 ft</option>
+                        <option value="2500">2,500 ft</option>
+                        <option value="5000">5,000 ft</option>
+                        <option value="10000">10,000 ft</option>
                     </select>
                 </div>
             </div>
