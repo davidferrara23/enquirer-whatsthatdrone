@@ -6,19 +6,22 @@
 
 ### VARS
 
-cfs_csv <- "./whats-that-drone/data/cfs_2025_092125.csv"  # adjust path as needed
+cfs_csv <- "./data/cfs_2025_092125.csv"  # adjust path as needed
 flight_paths_geojson <- "./flight_paths.geojson"  # input flight paths
-county_centerlines_geojson <- "./whats-that-drone/data/Countywide_Street_Centerlines.geojson"
+county_centerlines_geojson <- "./data/Countywide_Street_Centerlines.geojson"
 
 # Cache files
 today_date <- format(Sys.Date(), "%Y%m%d")
-cfs_cache_file <- paste0("./whats-that-drone/data/cfs_with_centerlines_", today_date, ".rds")
-previous_matched_file <- "./whats-that-drone/data/flight_paths_matched.geojson"
+cfs_cache_file <- paste0("./data/cfs_with_centerlines_", today_date, ".rds")
+previous_matched_file <- "./data/flight_paths_matched.geojson"
 
 ### INITIALIZE
 
 library(sf)
-library(tidyverse)
+library(dplyr)
+library(purrr)
+library(readr)
+library(stringr)
 library(lubridate)
 library(janitor)
 library(progress)

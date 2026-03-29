@@ -4,7 +4,7 @@
 ### by David Ferrara
 
 library(sf)
-library(tidyverse)
+library(dplyr)
 
 ### Load flight data (use CFS-matched version if it exists)
 flight_input <- if (file.exists("./whats-that-drone/data/flight_paths_matched.geojson")) {
