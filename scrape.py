@@ -123,6 +123,7 @@ if appended > 0:
     tmp_path = None
     try:
         target_dir = os.path.dirname(os.path.abspath(geojson_file)) or "."
+        os.makedirs(target_dir, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(prefix="flight_paths_", suffix=".geojson.tmp", dir=target_dir)
 
         # Write to a temp file first, then atomically replace the target file.
