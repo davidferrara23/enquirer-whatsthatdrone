@@ -2,3 +2,4 @@ data/*
 logs/*
 *.log
 update.py
+.venv
