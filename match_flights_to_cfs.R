@@ -487,6 +487,12 @@ if (file.exists(cfs_cache_file)) {
     }
     
     if (!is.null(pb)) pb$terminate()
+    # Bind fetched batches (ensure `new_rows` is always defined)
+    if (length(all_new_rows) == 0) {
+      new_rows <- tibble::tibble()
+    } else {
+      new_rows <- dplyr::bind_rows(all_new_rows)
+    }
 
     # If new rows exist, combine with static data
     if (nrow(new_rows) > 0) {
