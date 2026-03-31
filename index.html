@@ -790,11 +790,28 @@
 
                 const nearby = [];
                 allFlights.forEach(flight => {
+                    // Normalize coordinates to flat [lon,lat] array regardless of geometry type
+                    let coords = [];
+                    const geom = flight.geometry;
+                    if (geom.type === 'LineString') {
+                        coords = geom.coordinates;
+                    } else if (geom.type === 'MultiLineString') {
+                        geom.coordinates.forEach(line => line.forEach(c => coords.push(c)));
+                    } else if (geom.type === 'GeometryCollection') {
+                        geom.geometries.forEach(g => {
+                            if (g.type === 'LineString') g.coordinates.forEach(c => coords.push(c));
+                            if (g.type === 'MultiLineString') g.coordinates.forEach(line => line.forEach(c => coords.push(c)));
+                        });
+                    }
+
+                    if (coords.length === 0) return; // skip flights with no usable geometry
+
                     let minDist = Infinity;
-                    flight.geometry.coordinates.forEach(coord => {
+                    coords.forEach(coord => {
                         const d = getDistance(lat, lon, coord[1], coord[0]);
                         if (d < minDist) minDist = d;
                     });
+
                     if (minDist <= radiusMeters) {
                         nearby.push({
                             id: flight.properties.flight_id,
@@ -804,7 +821,7 @@
                             purpose: flight.properties.flight_purpose === 'Call for Service' ? 'Unknown' : (flight.properties.flight_purpose || 'Unknown'),
                             distance: minDist,
                             distanceFeet: minDist * 3.28084,
-                            coordinates: flight.geometry.coordinates.map(c => [c[1], c[0]])
+                            coordinates: coords.map(c => [c[1], c[0]])  // [lat, lon] for Leaflet
                         });
                     }
                 });
