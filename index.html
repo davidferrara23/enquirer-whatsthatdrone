@@ -947,10 +947,13 @@
                     `<b>Distance:</b> ${flight.distanceFeet.toFixed(0)} feet<br>` +
                     `<b>Purpose:</b> ${flight.purpose || 'N/A'}`
                 );
+                // tag the layer with the flight id so list clicks can reference it
+                line.flightId = flight.id;
                 flightLayers.push(line);
 
+                // Don't recenter the map on polyline clicks — just open the popup
                 line.on('click', () => {
-                    map.fitBounds(line.getBounds(), { padding: [50, 50] });
+                    line.openPopup();
                 });
             });
 
@@ -974,10 +977,19 @@
         }
 
         function zoomToFlight(flightId) {
-            const flight = nearbyFlights.find(f => f.id === flightId);
-            if (flight) {
-                const bounds = L.latLngBounds(flight.coordinates);
-                map.fitBounds(bounds, { padding: [50, 50] });
+            // Instead of recentering the map, open the flight's popup and briefly highlight it
+            const layer = flightLayers.find(l => l.flightId === flightId);
+            if (layer) {
+                layer.openPopup();
+                const originalWeight = (layer.options && layer.options.weight) || 3;
+                try {
+                    layer.setStyle({ weight: 6 });
+                    setTimeout(() => {
+                        layer.setStyle({ weight: originalWeight });
+                    }, 1500);
+                } catch (e) {
+                    // some layer types may not support setStyle; ignore errors
+                }
             }
         }
 
