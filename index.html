@@ -678,6 +678,8 @@
 
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Polyline decorator for arrowheads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.polylinedecorator/1.7.0/leaflet.polylineDecorator.min.js"></script>
     
     <script>
         const map = L.map('map').setView([39.1, -84.5], 12);
@@ -1035,6 +1037,29 @@
                     line.on('click', () => {
                         line.openPopup();
                     });
+
+                    // Add arrowheads along the line to show direction (uses PolylineDecorator)
+                    try {
+                        const decorator = L.polylineDecorator(line, {
+                            patterns: [
+                                {
+                                    offset: '10%',
+                                    repeat: '30px',
+                                    symbol: L.Symbol.arrowHead({
+                                        pixelSize: 8,
+                                        polygon: true,
+                                        headAngle: 45,
+                                        pathOptions: { fillOpacity: 1, weight: 0, color: color }
+                                    })
+                                }
+                            ]
+                        }).addTo(map);
+                        decorator.flightId = flight.id;
+                        flightLayers.push(decorator);
+                    } catch (e) {
+                        // PolylineDecorator may not be available; ignore gracefully
+                        console.warn('PolylineDecorator not available:', e);
+                    }
                 } else if (flight.coordinates && flight.coordinates.length === 1) {
                     const coord = flight.coordinates[0];
                     const marker = L.circleMarker(coord, {
