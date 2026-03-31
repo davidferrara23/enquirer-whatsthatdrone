@@ -257,11 +257,36 @@
             font-size: 14px;
             font-family: 'Unify Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             margin-top: 15px;
+            height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
-        
+
         .download-btn:hover {
             background: #229954;
         }
+
+        .sort-btn {
+            padding: 6px 12px;
+            background: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            height: 38px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.08s ease, opacity 0.12s ease;
+        }
+
+        .sort-btn:hover { transform: translateY(-1px); }
+
+        .sort-btn[aria-pressed="true"], .sort-btn.active { opacity: 1; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
         
         .map-tiles-light {
             filter: grayscale(20%) brightness(110%) contrast(85%);
@@ -627,8 +652,8 @@
                 <h3 style="margin: 0;">Flight Details</h3>
                 <div style="display:flex; gap:8px; align-items:center;">
                     <div style="font-size:13px; color:#7f8c8d;">Sort:</div>
-                    <button id="sortTimeBtn" class="download-btn" onclick="sortByTime()" style="padding:8px 12px;">Time</button>
-                    <button id="sortDistanceBtn" class="download-btn" onclick="sortByDistance()" style="padding:8px 12px;">Distance</button>
+                    <button id="sortTimeBtn" class="sort-btn" onclick="sortByTime()">Time</button>
+                    <button id="sortDistanceBtn" class="sort-btn" onclick="sortByDistance()">Distance</button>
                     <button class="download-btn" onclick="downloadResults()" style="margin: 0;">
                         📥 Download Results as CSV
                     </button>
@@ -1152,8 +1177,14 @@
 
             // update active button styles
             try {
-                document.getElementById('sortTimeBtn').style.opacity = currentSort === 'time' ? '1' : '0.7';
-                document.getElementById('sortDistanceBtn').style.opacity = currentSort === 'distance' ? '1' : '0.7';
+                const t = document.getElementById('sortTimeBtn');
+                const d = document.getElementById('sortDistanceBtn');
+                if (t && d) {
+                    t.setAttribute('aria-pressed', currentSort === 'time' ? 'true' : 'false');
+                    d.setAttribute('aria-pressed', currentSort === 'distance' ? 'true' : 'false');
+                    t.classList.toggle('active', currentSort === 'time');
+                    d.classList.toggle('active', currentSort === 'distance');
+                }
             } catch (e) {}
 
             const flightItems = document.getElementById('flightItems');
