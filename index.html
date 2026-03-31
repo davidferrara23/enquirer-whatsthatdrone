@@ -109,13 +109,27 @@
             white-space: nowrap;
         }
         
-        select, input[type="number"] {
+        select, input[type="number"], input[type="date"] {
             padding: 8px 12px;
             border: 2px solid #EDEDED;
             border-radius: 6px;
             font-size: 14px;
             font-family: 'Unify Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            min-width: 100px;
+            min-width: 120px;
+            height: 38px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input[type="date"]:focus {
+            outline: none;
+            border-color: #009BFF;
+            box-shadow: 0 0 0 3px rgba(0,155,255,0.08);
+        }
+
+        /* Make the date control's calendar icon look clickable */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            filter: invert(20%);
         }
         
         .results-box {
@@ -518,7 +532,7 @@
                 <input 
                     type="text" 
                     id="addressInput" 
-                    placeholder="Enter an address, location, neighborhood or ZIP code... (e.g., 801 Plum St)"
+                    placeholder="Enter an address, location, neighborhood or ZIP code"
                     onkeypress="if(event.key==='Enter') searchAddress()"
                 />
                 <button class="search-btn" onclick="searchAddress()" id="searchBtn">
@@ -539,6 +553,14 @@
                         <option value="5000">5,000 ft</option>
                         <option value="10000">10,000 ft</option>
                     </select>
+                </div>
+                <div class="option-group">
+                    <label for="startDateInput">From (optional):</label>
+                    <input type="date" id="startDateInput" />
+                </div>
+                <div class="option-group">
+                    <label for="endDateInput">To (optional):</label>
+                    <input type="date" id="endDateInput" />
                 </div>
             </div>
         </div>
@@ -601,11 +623,16 @@
         <div id="map"></div>
         
         <div class="flight-list" id="flightList">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; gap: 12px;">
                 <h3 style="margin: 0;">Flight Details</h3>
-                <button class="download-btn" onclick="downloadResults()" style="margin: 0;">
-                    📥 Download Results as CSV
-                </button>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <div style="font-size:13px; color:#7f8c8d;">Sort:</div>
+                    <button id="sortTimeBtn" class="download-btn" onclick="sortByTime()" style="padding:8px 12px;">Time</button>
+                    <button id="sortDistanceBtn" class="download-btn" onclick="sortByDistance()" style="padding:8px 12px;">Distance</button>
+                    <button class="download-btn" onclick="downloadResults()" style="margin: 0;">
+                        📥 Download Results as CSV
+                    </button>
+                </div>
             </div>
             <div id="flightItems"></div>
         </div>
@@ -641,6 +668,12 @@
         let nearbyFlights = [];
         let flightDataPromise = null;
         let userHasInteracted = false;
+        // Currently selected flight id (when user wants to focus one flight)
+        let selectedFlightId = null;
+        // Layers removed from the map while a single flight is selected
+        let hiddenFlightLayers = [];
+        // current sort mode: 'distance' or 'time'
+        let currentSort = 'distance';
 
         function loadFlightData() {
             if (flightDataPromise) return flightDataPromise;
@@ -790,6 +823,24 @@
 
                 const nearby = [];
                 allFlights.forEach(flight => {
+                    // Optional date filter: skip flights outside the chosen date range
+                    try {
+                        const startDateStr = document.getElementById('startDateInput').value;
+                        const endDateStr = document.getElementById('endDateInput').value;
+                        if (startDateStr || endDateStr) {
+                            const flightTime = new Date(flight.properties.takeoff);
+                            if (startDateStr) {
+                                const startDate = new Date(startDateStr + 'T00:00:00');
+                                if (flightTime < startDate) return; // skip this flight
+                            }
+                            if (endDateStr) {
+                                const endDate = new Date(endDateStr + 'T23:59:59');
+                                if (flightTime > endDate) return; // skip this flight
+                            }
+                        }
+                    } catch (e) {
+                        // ignore date parsing errors and continue
+                    }
                     // Normalize coordinates to flat [lon,lat] array regardless of geometry type
                     let coords = [];
                     const geom = flight.geometry;
@@ -936,44 +987,49 @@
             const radiusMeters = radiusFeet * 0.3048;
             flights.forEach(flight => {
                 const color = getColorByDistance(flight.distance, radiusMeters);
-                const line = L.polyline(flight.coordinates, {
-                    color: color,
-                    weight: 3,
-                    opacity: 0.7
-                }).addTo(map).bindPopup(
-                    `<b>Flight Details</b><br>` +
-                    `<b>Date:</b> ${flight.date}<br>` +
-                    `<b>Time:</b> ${flight.takeoff} - ${flight.landing}<br>` +
-                    `<b>Distance:</b> ${flight.distanceFeet.toFixed(0)} feet<br>` +
-                    `<b>Purpose:</b> ${flight.purpose || 'N/A'}`
-                );
-                // tag the layer with the flight id so list clicks can reference it
-                line.flightId = flight.id;
-                flightLayers.push(line);
+                const popupHtml = `
+                    <b>Flight Details</b><br>
+                    <b>Date:</b> ${flight.date}<br>
+                    <b>Time:</b> ${flight.takeoff} - ${flight.landing}<br>
+                    <b>Distance:</b> ${flight.distanceFeet.toFixed(0)} feet<br>
+                    <b>Purpose:</b> ${flight.purpose || 'N/A'}`;
 
-                // Don't recenter the map on polyline clicks — just open the popup
-                line.on('click', () => {
-                    line.openPopup();
-                });
+                // If the flight has multiple coordinates, draw a polyline.
+                // If it has only a single coordinate (Point or degenerate LineString), draw a marker so it's visible.
+                if (flight.coordinates && flight.coordinates.length > 1) {
+                    const line = L.polyline(flight.coordinates, {
+                        color: color,
+                        weight: 3,
+                        opacity: 0.7
+                    }).addTo(map).bindPopup(popupHtml);
+                    // tag the layer with the flight id so list clicks can reference it
+                    line.flightId = flight.id;
+                    flightLayers.push(line);
+
+                    // Don't recenter the map on polyline clicks — just open the popup
+                    line.on('click', () => {
+                        line.openPopup();
+                    });
+                } else if (flight.coordinates && flight.coordinates.length === 1) {
+                    const coord = flight.coordinates[0];
+                    const marker = L.circleMarker(coord, {
+                        radius: 6,
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: 0.9,
+                        weight: 1
+                    }).addTo(map).bindPopup(popupHtml);
+                    marker.flightId = flight.id;
+                    flightLayers.push(marker);
+                    marker.on('click', () => {
+                        marker.openPopup();
+                    });
+                }
+                // Flights without coordinates won't get a layer; they'll still appear in the list
             });
 
-            const flightItems = document.getElementById('flightItems');
-            flightItems.innerHTML = flights.map(flight => `
-                <div class="flight-item" onclick="zoomToFlight('${flight.id}')">
-                    <div class="flight-date">${flight.date} - ${flight.distanceFeet.toFixed(0)} ft away</div>
-                    <div class="flight-details">
-                        <span>⏰ ${flight.takeoff} - ${flight.landing}</span>
-                        ${flight.purpose !== 'Unknown' ? `
-                            <span class="purpose-tooltip">📍 ${flight.purpose}
-                                <span class="tooltiptext">
-                                    Cincinnati police do not publish the purpose for each drone flight. We approximate purposes by matching police calls that occurred near drone flights at the same time and place. Flights without a purpose did not match to a specific incident.
-                                    <a href="https://www.cincinnati.com/story/news/crime/2025/12/11/look-up-cincinnati-police-drone-flights-near-your-home-address-here/87605065007/" target="_blank">Learn more about our methodology.</a>
-                                </span>
-                            </span>
-                        ` : ''}
-                    </div>
-                </div>
-            `).join('');
+            // Render the list according to the current sort
+            renderFlightList();
         }
 
         function zoomToFlight(flightId) {
@@ -990,7 +1046,143 @@
                 } catch (e) {
                     // some layer types may not support setStyle; ignore errors
                 }
+                return;
             }
+
+            // If there's no existing layer (flight had no drawn line), try to show a temporary marker/popup
+            const flight = nearbyFlights.find(f => f.id === flightId);
+            if (flight && flight.coordinates && flight.coordinates.length > 0) {
+                const coord = flight.coordinates[0];
+                // temporary highlight marker (won't recenter the map)
+                const tmp = L.circleMarker(coord, { radius: 8, color: '#3388ff', fillOpacity: 0.9 }).addTo(map);
+                const popupHtml = `
+                    <b>Flight Details</b><br>
+                    <b>Date:</b> ${flight.date}<br>
+                    <b>Time:</b> ${flight.takeoff} - ${flight.landing}<br>
+                    <b>Distance:</b> ${flight.distanceFeet.toFixed(0)} feet<br>
+                    <b>Purpose:</b> ${flight.purpose || 'N/A'}`;
+                tmp.bindPopup(popupHtml).openPopup();
+                setTimeout(() => {
+                    try { map.removeLayer(tmp); } catch (e) {}
+                }, 2000);
+            }
+        }
+
+        function clearSelection() {
+            if (!selectedFlightId) return;
+
+            // Restore previously hidden layers
+            hiddenFlightLayers.forEach(l => {
+                try { map.addLayer(l); } catch (e) {}
+            });
+            hiddenFlightLayers = [];
+
+            // Reset style of previously selected layer
+            const prev = flightLayers.find(l => l.flightId === selectedFlightId);
+            if (prev) {
+                try { prev.setStyle({ weight: 3 }); } catch (e) {
+                    if (prev.setRadius) prev.setRadius(6);
+                }
+            }
+
+            selectedFlightId = null;
+        }
+
+        function selectFlight(flightId) {
+            // If the flight is already selected, do nothing
+            if (selectedFlightId === flightId) return;
+
+            // Restore any previous selection first
+            clearSelection();
+
+            // Hide all other flight layers and keep the selected one
+            flightLayers.forEach(layer => {
+                if (layer.flightId && layer.flightId !== flightId) {
+                    if (map.hasLayer(layer)) {
+                        hiddenFlightLayers.push(layer);
+                        try { map.removeLayer(layer); } catch (e) {}
+                    }
+                }
+            });
+
+            // Highlight the selected layer (if present)
+            const sel = flightLayers.find(l => l.flightId === flightId);
+            if (sel) {
+                try { sel.setStyle({ weight: 6 }); } catch (e) { if (sel.setRadius) sel.setRadius(8); }
+                if (sel.openPopup) sel.openPopup();
+                if (sel.bringToFront) sel.bringToFront();
+            } else {
+                // no permanent layer for this flight — show temporary marker
+                const flight = nearbyFlights.find(f => f.id === flightId);
+                if (flight && flight.coordinates && flight.coordinates.length > 0) {
+                    const coord = flight.coordinates[0];
+                    const tmp = L.circleMarker(coord, { radius: 8, color: '#3388ff', fillOpacity: 0.9 }).addTo(map);
+                    const popupHtml = `
+                        <b>Flight Details</b><br>
+                        <b>Date:</b> ${flight.date}<br>
+                        <b>Time:</b> ${flight.takeoff} - ${flight.landing}<br>
+                        <b>Distance:</b> ${flight.distanceFeet.toFixed(0)} feet<br>
+                        <b>Purpose:</b> ${flight.purpose || 'N/A'}`;
+                    tmp.bindPopup(popupHtml).openPopup();
+                    // keep temporary marker until next action
+                    hiddenFlightLayers.push(tmp);
+                }
+            }
+
+            selectedFlightId = flightId;
+        }
+
+        // Clicking anywhere on the map clears a selection and restores all flights
+        map.on('click', () => {
+            clearSelection();
+        });
+
+        function renderFlightList() {
+            // sort nearbyFlights in-place according to currentSort
+            if (currentSort === 'time') {
+                nearbyFlights.sort((a, b) => {
+                    const ta = new Date(`${a.date} ${a.takeoff}`).getTime();
+                    const tb = new Date(`${b.date} ${b.takeoff}`).getTime();
+                    return tb - ta; // most recent first
+                });
+            } else {
+                // distance ascending
+                nearbyFlights.sort((a, b) => a.distance - b.distance);
+            }
+
+            // update active button styles
+            try {
+                document.getElementById('sortTimeBtn').style.opacity = currentSort === 'time' ? '1' : '0.7';
+                document.getElementById('sortDistanceBtn').style.opacity = currentSort === 'distance' ? '1' : '0.7';
+            } catch (e) {}
+
+            const flightItems = document.getElementById('flightItems');
+            flightItems.innerHTML = nearbyFlights.map(flight => `
+                <div class="flight-item" onclick="selectFlight('${flight.id}')">
+                    <div class="flight-date">${flight.date} - ${flight.distanceFeet.toFixed(0)} ft away</div>
+                    <div class="flight-details">
+                        <span>⏰ ${flight.takeoff} - ${flight.landing}</span>
+                        ${flight.purpose !== 'Unknown' ? `
+                            <span class="purpose-tooltip">📍 ${flight.purpose}
+                                <span class="tooltiptext">
+                                    Cincinnati police do not publish the purpose for each drone flight. We approximate purposes by matching police calls that occurred near drone flights at the same time and place. Flights without a purpose did not match to a specific incident.
+                                    <a href="https://www.cincinnati.com/story/news/crime/2025/12/11/look-up-cincinnati-police-drone-flights-near-your-home-address-here/87605065007/" target="_blank">Learn more about our methodology.</a>
+                                </span>
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function sortByTime() {
+            currentSort = 'time';
+            renderFlightList();
+        }
+
+        function sortByDistance() {
+            currentSort = 'distance';
+            renderFlightList();
         }
 
         function downloadResults() {
