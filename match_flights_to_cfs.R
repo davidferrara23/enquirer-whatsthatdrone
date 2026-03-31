@@ -7,7 +7,7 @@
 ### VARS
 
 cfs_csv <- "./data/cfs_2025_092125.csv"  # adjust path as needed
-flight_paths_geojson <- "./flight_paths.geojson"  # input flight paths
+flight_paths_geojson <- "./data/flight_paths.geojson"  # input flight paths
 county_centerlines_geojson <- "./data/Countywide_Street_Centerlines.geojson"
 
 # Cache files
@@ -263,7 +263,7 @@ if (file.exists(cfs_cache_file)) {
 } else {
   # Check for yesterday's cache - use as base for CFS
   yesterday_date <- format(Sys.Date() - 1, "%Y%m%d")
-  yesterday_cache <- paste0("./whats-that-drone/data/cfs_with_centerlines_", yesterday_date, ".rds")
+  yesterday_cache <- paste0("./data/cfs_with_centerlines_", yesterday_date, ".rds")
   
   if (file.exists(yesterday_cache)) {
     message("✓ Found yesterday's CFS cache - using as base")
@@ -596,7 +596,7 @@ if (file.exists(cfs_cache_file)) {
 
 # Clean up old CFS caches (keep last 7 days) - MOVED TO AFTER cache is saved
 all_cache_files <- list.files(
-  path = "./whats-that-drone/data",
+  path = "./data",
   pattern = "^cfs_with_centerlines_.*\\.rds$",
   full.names = TRUE
 )

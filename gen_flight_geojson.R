@@ -7,12 +7,12 @@ library(sf)
 library(dplyr)
 
 ### Load flight data (use CFS-matched version if it exists)
-flight_input <- if (file.exists("./whats-that-drone/data/flight_paths_matched.geojson")) {
+flight_input <- if (file.exists("./data/flight_paths_matched.geojson")) {
   message("Loading CFS-matched flight data...")
-  "./whats-that-drone/data/flight_paths_matched.geojson"
+  "./data/flight_paths_matched.geojson"
 } else {
   message("Loading original flight data...")
-  "./whats-that-drone/data/flight_paths.geojson"
+  "./data/flight_paths.geojson"
 }
 
 flights_sf <- st_read(flight_input)
@@ -45,7 +45,7 @@ flights_clean <- flights_sf[valid_indices, ] %>%
 cat("✓ Cleaned to", nrow(flights_clean), "flights\n")
 
 # Write single GeoJSON file
-st_write(flights_clean, "whats-that-drone/flights.geojson", delete_dsn = TRUE)
+st_write(flights_clean, "flights.geojson", delete_dsn = TRUE)
 
-file_size <- file.info("whats-that-drone/flights.geojson")$size / 1024 / 1024
+file_size <- file.info("flights.geojson")$size / 1024 / 1024
 cat("✓ Created flights.geojson -", round(file_size, 2), "MB\n")
