@@ -10,6 +10,7 @@ import tempfile
 from datetime import datetime
 
 # Output GeoJSON file
+os.umask(0o022)
 geojson_file = "data/flight_paths.geojson" # replace with your desired path
 
 # ArcGIS FeatureServer endpoint
@@ -133,6 +134,8 @@ if appended > 0:
             os.fsync(f.fileno())
 
         os.replace(tmp_path, geojson_file)
+        os.chmod(geojson_file, 0o644)
+
         msg = f"✅ Fetched {fetched} features, appended {appended} new flight paths to {geojson_file}"
         print(msg)
         log_message(msg)

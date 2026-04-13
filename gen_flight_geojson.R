@@ -45,7 +45,11 @@ flights_clean <- flights_sf[valid_indices, ] %>%
 cat("✓ Cleaned to", nrow(flights_clean), "flights\n")
 
 # Write single GeoJSON file
+Sys.umask("022")
 st_write(flights_clean, "flights.geojson", delete_dsn = TRUE)
+
+# Force correct permissions regardless of umask
+system("chmod 644 flights.geojson")
 
 file_size <- file.info("flights.geojson")$size / 1024 / 1024
 cat("✓ Created flights.geojson -", round(file_size, 2), "MB\n")
